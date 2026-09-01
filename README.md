@@ -1,8 +1,8 @@
-🐍 Viper
+# 🐍 Viper
 
-A lightweight, multi-threaded TCP port scanner written in Python. Designed to be fast, clean, and easy to use, with optional service detection (banner grabbing) and output exporting.
+**A lightweight, multi-threaded TCP port scanner written in Python. Designed to be fast, clean, and easy to use, with optional service detection (banner grabbing) and output exporting.**
 
-✨ Features
+## ✨ Features
 
     Multi-threaded: Scans 100 ports concurrently for maximum speed.
     Smart Defaults: Automatically scans the top ~55 most common ports if no range is specified.
