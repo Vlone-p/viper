@@ -1,6 +1,6 @@
 # 🐍 Viper
 
-**A lightweight, multi-threaded TCP port scanner written in Python. Designed to be fast, clean, and easy to use, with optional service detection (banner grabbing) and output exporting.**
+**A lightweight, multi threaded TCP port scanner written in Python. Designed to be fast, clean, and easy to use, with optional service detection (banner grabbing) and output exporting.**
 
 ## ✨ Features
 
@@ -11,7 +11,7 @@
     Export Results (-oN): Saves scan results to a text file for later analysis.
     Flexible Port Targeting (-p): Scan single ports, comma-separated lists, or custom ranges.
 
-📦 Requirements
+## 📦 Requirements
 
     Python 3.10+ (Uses modern type hinting)
 
@@ -30,10 +30,10 @@ target	Target IP address or domain name (e.g., 192.168.1.1 or scanme.nmap.org).
 -v	Enable verbose output (live scanning progress).
 -oN	Save scan results to a specified text file.
 
-⚠️ Legal & Ethical Disclaimer
+## ⚠️ Legal & Ethical Disclaimer
 
 This tool is intended for educational purposes and authorized network auditing only. Port scanning without explicit permission from the target owner may be illegal and is considered an attack in many jurisdictions. Only scan networks and devices you own or have explicit permission to test.
 
-📄 License
+## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
