@@ -33,3 +33,7 @@ target	Target IP address or domain name (e.g., 192.168.1.1 or scanme.nmap.org).
 ⚠️ Legal & Ethical Disclaimer
 
 This tool is intended for educational purposes and authorized network auditing only. Port scanning without explicit permission from the target owner may be illegal and is considered an attack in many jurisdictions. Only scan networks and devices you own or have explicit permission to test.
+
+📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
