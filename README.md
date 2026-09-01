@@ -28,3 +28,7 @@ target	Target IP address or domain name (e.g., 192.168.1.1 or scanme.nmap.org).
 -sV	Enable service detection (banner grabbing).
 -v	Enable verbose output (live scanning progress).
 -oN	Save scan results to a specified text file.
+
+⚠️ Legal & Ethical Disclaimer
+
+This tool is intended for educational purposes and authorized network auditing only. Port scanning without explicit permission from the target owner may be illegal and is considered an attack in many jurisdictions. Only scan networks and devices you own or have explicit permission to test.
