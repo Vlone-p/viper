@@ -1,4 +1,4 @@
-🚀 Panner
+🐍 Viper
 
 A lightweight, multi-threaded TCP port scanner written in Python. Designed to be fast, clean, and easy to use, with optional service detection (banner grabbing) and output exporting.
 
