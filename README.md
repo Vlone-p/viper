@@ -18,7 +18,7 @@ A lightweight, multi-threaded TCP port scanner written in Python. Designed to be
 No external libraries are required! It uses only Python standard libraries (socket, argparse, concurrent.futures).
 🛠️ Usage
 
-python scanner.py <target> [options]
+python viper.py <target> [options]
 
 Options
 Flag
