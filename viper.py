@@ -1,7 +1,25 @@
 import socket
 import argparse
 import threading
+import time
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# ANSI Color Codes
+GREEN = '\033[92m'
+RED = '\033[91m'
+YELLOW = '\033[93m'
+CYAN = '\033[96m'
+RESET = '\033[0m'
+
+BANNER = rf"""{CYAN}
+____   ____.__                     
+\   \ /   /|__|_____   ___________ 
+ \   Y   / |  \____ \_/ __ \_  __ \
+  \     /  |  |  |_> >  ___/|  | \/
+   \___/   |__|   __/ \___  >__|   
+              |__|        \/       {RESET}{YELLOW}v1.1{RESET}
+"""
 
 COMMON_PORTS = {
     20: "FTP Data", 21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP",
@@ -40,7 +58,7 @@ def grab_banner(target_ip: str, port: int) -> str:
 def scan_port(target_ip: str, port: int, detect_service: bool, verbose: bool) -> tuple[int, str] | None:
     if verbose:
         with print_lock:
-            print(f"[*] Scanning port {port}...")
+            print(f"{YELLOW}[*] Scanning port {port}...{RESET}", end='\r')
             
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -73,26 +91,33 @@ def main():
     parser.add_argument("-p", "--ports", help="Port range (e.g., 1-1024 or 22,80,443). Defaults to top ports.")
     parser.add_argument("-sV", action="store_true", help="Enable service detection (banner grabbing)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output (live scanning progress)")
+    parser.add_argument("-t", "--threads", type=int, default=100, help="Number of concurrent threads (default: 100)")
     parser.add_argument("-oN", metavar="FILE", help="Save scan results to a text file")
+    parser.add_argument("-oJ", metavar="FILE", help="Save scan results to a JSON file")
     args = parser.parse_args()
+
+    print(BANNER)
 
     try:
         target_ip = socket.gethostbyname(args.target)
-        print(f"\nStarting scan on {args.target} ({target_ip})...\n")
+        print(f"{CYAN}[*] Starting scan on {args.target} ({target_ip}){RESET}")
+        print(f"{CYAN}[*] Thread count set to {args.threads}{RESET}\n")
     except socket.gaierror:
-        print(f"\nError: Cannot resolve hostname '{args.target}'")
+        print(f"{RED}[!] Error: Cannot resolve hostname '{args.target}'{RESET}")
         return
 
     if args.ports:
         ports = parse_ports(args.ports)
-        print(f"Scanning {len(ports)} specified ports...")
+        print(f"[*] Scanning {len(ports)} specified ports...")
     else:
         ports = TOP_PORTS
-        print(f"Scanning top {len(ports)} common ports... (Use -p to specify a range)")
+        print(f"[*] Scanning top {len(ports)} common ports... (Use -p to specify a range)")
 
     open_ports = []
     
-    with ThreadPoolExecutor(max_workers=100) as executor:
+    start_time = time.time()
+    
+    with ThreadPoolExecutor(max_workers=args.threads) as executor:
         future_to_port = {
             executor.submit(scan_port, target_ip, port, args.sV, args.verbose): port 
             for port in ports
@@ -102,9 +127,15 @@ def main():
             if result:
                 open_ports.append(result)
 
-    print("\n" + "="*40)
-    print("SCAN RESULTS")
-    print("="*40)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    
+    if args.verbose:
+        print(" " * 40, end='\r')
+
+    print("\n" + "="*50)
+    print(f"{CYAN}SCAN RESULTS{RESET}")
+    print("="*50)
 
     output_lines = []
     
@@ -114,29 +145,46 @@ def main():
             output_lines.append(header)
             output_lines.append("-" * len(header))
             for port, service in sorted(open_ports):
-                output_lines.append(f"{port:<10} {'open':<10} {service}")
+                output_lines.append(f"{port:<10} {GREEN}open{RESET:<4} {service}")
         else:
             header = f"{'PORT':<10} {'STATE'}"
             output_lines.append(header)
             output_lines.append("-" * len(header))
             for port, _ in sorted(open_ports):
-                output_lines.append(f"{port:<10} {'open'}")
+                output_lines.append(f"{port:<10} {GREEN}open{RESET}")
     else:
-        output_lines.append("No open ports found.")
+        output_lines.append(f"{RED}No open ports found.{RESET}")
         
     for line in output_lines:
         print(line)
         
+    print("="*50)
+    print(f"{CYAN}Scan completed in {elapsed_time:.2f} seconds{RESET}")
+        
     if args.oN:
         try:
+            clean_lines = [line.replace(GREEN, "").replace(RED, "").replace(YELLOW, "").replace(CYAN, "").replace(RESET, "") for line in output_lines]
             with open(args.oN, 'w') as f:
                 f.write(f"Scan results for: {args.target} ({target_ip})\n")
-                f.write("\n".join(output_lines) + "\n")
-            print(f"\n[+] Results saved to {args.oN}")
+                f.write(f"Completed in: {elapsed_time:.2f} seconds\n\n")
+                f.write("\n".join(clean_lines) + "\n")
+            print(f"{GREEN}[+] Text results saved to {args.oN}{RESET}")
         except IOError as e:
-            print(f"\n[!] Error writing to file: {e}")
-        
-    print("\nScan complete.")
+            print(f"{RED}[!] Error writing to text file: {e}{RESET}")
+
+    if args.oJ:
+        try:
+            json_data = {
+                "target": args.target,
+                "ip": target_ip,
+                "scan_time_seconds": round(elapsed_time, 2),
+                "open_ports": [{"port": p, "service": s} for p, s in sorted(open_ports)]
+            }
+            with open(args.oJ, 'w') as f:
+                json.dump(json_data, f, indent=4)
+            print(f"{GREEN}[+] JSON results saved to {args.oJ}{RESET}")
+        except IOError as e:
+            print(f"{RED}[!] Error writing to JSON file: {e}{RESET}")
 
 if __name__ == "__main__":
     main()
