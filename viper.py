@@ -6,6 +6,8 @@ import json
 import platform
 import subprocess
 import re
+import ipaddress
+import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 GREEN = '\033[92m'
@@ -20,22 +22,22 @@ ____   ____.__
  \   Y   / |  \____ \_/ __ \_  __ \
   \     /  |  |  |_> >  ___/|  | \/
    \___/   |__|   __/ \___  >__|   
-              |__|        \/       {RESET}{YELLOW}v1.3{RESET}
+              |__|        \/       {RESET}{YELLOW}v1.6{RESET}
 """
 
 COMMON_PORTS = {
     7: "Echo", 20: "FTP Data", 21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP",
     53: "DNS", 80: "HTTP", 88: "Kerberos", 110: "POP3", 111: "RPCbind",
     135: "MSRPC", 139: "NetBIOS", 143: "IMAP", 389: "LDAP", 443: "HTTPS",
-    445: "SMB", 464: "kpasswd5", 465: "SMTPS", 587: "SMTP-Submission",
+    445: "SMB", 464: "kpasswd5", 465: "SMTPS", 587: "SMTP Submission",
     593: "RPC over HTTP", 631: "IPP", 636: "LDAPS", 873: "rsync", 990: "FTPS",
     993: "IMAPS", 995: "POP3S", 1025: "NFS", 1080: "SOCKS Proxy", 1194: "OpenVPN",
     1433: "MSSQL", 1434: "MSSQL Ping", 1521: "Oracle DB", 1723: "PPTP", 2049: "NFS",
     2082: "cPanel", 2083: "cPanel SSL", 2086: "WebHost Manager", 2087: "WebHost Manager SSL",
-    2222: "SSH-Alt", 2375: "Docker", 2376: "Docker SSL", 3000: "Node.js", 3128: "Squid Proxy",
+    2222: "SSH Alt", 2375: "Docker", 2376: "Docker SSL", 3000: "Node.js", 3128: "Squid Proxy",
     3268: "Global Catalog LDAP", 3269: "Global Catalog LDAPS", 3306: "MySQL", 3389: "RDP",
     3478: "STUN", 5432: "PostgreSQL", 5900: "VNC", 5985: "WinRM HTTP", 5986: "WinRM HTTPS",
-    6379: "Redis", 6443: "Kubernetes API", 8080: "HTTP-Proxy", 8443: "HTTPS-Alt", 8888: "HTTP-Alt",
+    6379: "Redis", 6443: "Kubernetes API", 8080: "HTTP Proxy", 8443: "HTTPS Alt", 8888: "HTTP Alt",
     9000: "Portainer", 9090: "Prometheus", 9092: "Kafka", 9200: "Elasticsearch", 11211: "Memcached",
     27017: "MongoDB"
 }
@@ -49,14 +51,24 @@ TOP_PORTS = [
 ]
 
 HTTP_PORTS = [80, 5985, 8080, 8443, 8888, 3000]
-
 print_lock = threading.Lock()
+
+def ping_host(target_ip: str) -> bool:
+    is_windows = platform.system().lower() == "windows"
+    param = '-n' if is_windows else '-c'
+    wait_param = '-w' if is_windows else '-W'
+    wait_time = '1000' if is_windows else '1'
+    command = ['ping', param, '1', wait_param, wait_time, target_ip]
+    try:
+        output = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=2)
+        return output.returncode == 0
+    except Exception:
+        return False
 
 def detect_os(target_ip: str) -> str:
     is_windows = platform.system().lower() == "windows"
     param = '-n' if is_windows else '-c'
     command = ['ping', param, '1', target_ip]
-    
     try:
         output = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
         if output.returncode == 0:
@@ -74,19 +86,16 @@ def detect_os(target_ip: str) -> str:
             return "Unknown (No TTL in ping response)"
         return "Host seems down or blocks ICMP ping"
     except Exception:
-        return "Ping command failed/timeout"
+        return "Ping command failed or timeout"
 
 def grab_banner(target_ip: str, port: int) -> str:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(1.5)
             s.connect((target_ip, port))
-            
             if port in HTTP_PORTS:
                 s.send(b"GET / HTTP/1.0\r\nHost: " + target_ip.encode() + b"\r\n\r\n")
-            
             banner = s.recv(1024).decode('utf-8', errors='ignore').strip()
-            
             if banner:
                 if "HTTP/" in banner:
                     for line in banner.split('\n'):
@@ -97,11 +106,9 @@ def grab_banner(target_ip: str, port: int) -> str:
         pass
     return ""
 
-def scan_port(target_ip: str, port: int, detect_service: bool, verbose: bool) -> tuple[int, str] | None:
-    if verbose:
-        with print_lock:
-            print(f"{YELLOW}[*] Scanning port {port}...{RESET}", end='\r')
-            
+def scan_port(target_ip: str, port: int, detect_service: bool, delay: float) -> tuple[int, str] | None:
+    if delay > 0:
+        time.sleep(random.uniform(0, delay))
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(1.0)
@@ -127,100 +134,187 @@ def parse_ports(port_str: str) -> list[int]:
             ports.add(int(part))
     return sorted(list(ports))
 
+def load_targets(target_arg: str, file_arg: str) -> list[str]:
+    targets = set()
+    if file_arg:
+        try:
+            with open(file_arg, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        targets.add(line)
+        except IOError:
+            print(f"{RED}[!] Error reading file: {file_arg}{RESET}")
+    if target_arg:
+        targets.add(target_arg)
+
+    resolved_ips = set()
+    for t in targets:
+        if '/' in t:
+            try:
+                network = ipaddress.ip_network(t, strict=False)
+                for ip in network.hosts():
+                    resolved_ips.add(str(ip))
+            except ValueError:
+                print(f"{RED}[!] Invalid CIDR: {t}{RESET}")
+        else:
+            try:
+                resolved_ips.add(socket.gethostbyname(t))
+            except socket.gaierror:
+                print(f"{RED}[!] Cannot resolve hostname: {t}{RESET}")
+    return sorted(list(resolved_ips))
+
 def main():
     parser = argparse.ArgumentParser(description="Fast Python Port Scanner")
-    parser.add_argument("target", help="Target IP address or domain name")
+    parser.add_argument("target", nargs='?', help="Target IP, domain, or CIDR subnet")
+    parser.add_argument("-iL", metavar="FILE", help="Read targets from a text file")
     parser.add_argument("-p", "--ports", help="Port range (e.g., 1-1024 or 22,80,443). Defaults to top ports.")
+    parser.add_argument("--exclude", help="Exclude specific ports (e.g., 80,443)")
     parser.add_argument("-sV", action="store_true", help="Enable service detection (banner grabbing)")
     parser.add_argument("-O", action="store_true", help="Enable OS detection via ICMP TTL fingerprinting")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output (live scanning progress)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output (progress bar)")
     parser.add_argument("-t", "--threads", type=int, default=100, help="Number of concurrent threads (default: 100)")
+    parser.add_argument("--delay", type=float, default=0.0, help="Add a random delay in seconds between probes (e.g., 0.5)")
     parser.add_argument("-oN", metavar="FILE", help="Save scan results to a text file")
     parser.add_argument("-oJ", metavar="FILE", help="Save scan results to a JSON file")
+    parser.add_argument("-sn", action="store_true", help="Perform a ping sweep only (disable port scanning)")
     args = parser.parse_args()
 
     print(BANNER)
 
-    try:
-        target_ip = socket.gethostbyname(args.target)
-        print(f"{CYAN}[*] Starting scan on {args.target} ({target_ip}){RESET}")
-        print(f"{CYAN}[*] Thread count set to {args.threads}{RESET}\n")
-    except socket.gaierror:
-        print(f"{RED}[!] Error: Cannot resolve hostname '{args.target}'{RESET}")
+    if not args.target and not args.iL:
+        print(f"{RED}[!] Error: You must specify a target or provide an input file (-iL).{RESET}")
         return
 
-    os_info = None
+    target_ips = load_targets(args.target, args.iL)
+    if not target_ips:
+        return
+
+    print(f"{CYAN}[*] Loaded {len(target_ips)} target(s){RESET}")
+    print(f"{CYAN}[*] Thread count set to {args.threads}{RESET}\n")
+
+    # Ping Sweep / Host Discovery ONLY
+    if args.sn:
+        print(f"{YELLOW}[*] Running host discovery (ping sweep)...{RESET}")
+        alive_hosts = []
+        with ThreadPoolExecutor(max_workers=args.threads) as executor:
+            future_to_ip = {executor.submit(ping_host, ip): ip for ip in target_ips}
+            for future in as_completed(future_to_ip):
+                if future.result():
+                    alive_hosts.append(future_to_ip[future])
+        
+        print(f"{GREEN}[*] Discovered {len(alive_hosts)} live hosts.{RESET}\n")
+        
+        print(f"{CYAN}Live Hosts:{RESET}")
+        for ip in sorted(alive_hosts):
+            print(f"  [+] {ip}")
+        return
+
+    os_info = {}
     if args.O:
-        print(f"{YELLOW}[*] Performing OS detection via ICMP...{RESET}", end='')
-        os_info = detect_os(target_ip)
-        print(f"\r{GREEN}[*] OS Detection: {os_info}{RESET}")
+        print(f"{YELLOW}[*] Performing OS detection via ICMP...{RESET}")
+        for ip in target_ips:
+            os_info[ip] = detect_os(ip)
+        print(f"{GREEN}[*] OS Detection complete.{RESET}\n")
 
     if args.ports:
         ports = parse_ports(args.ports)
-        print(f"[*] Scanning {len(ports)} specified ports...")
     else:
         ports = TOP_PORTS
-        print(f"[*] Scanning top {len(ports)} common ports... (Use -p to specify a range)")
 
-    open_ports = []
+    if args.exclude:
+        exclude_set = set(parse_ports(args.exclude))
+        ports = [p for p in ports if p not in exclude_set]
+
+    print(f"[*] Scanning {len(ports)} ports on {len(target_ips)} hosts...")
+
+    all_results = {}
+    total_scans = len(target_ips) * len(ports)
+    scanned_count = 0
     
     start_time = time.time()
     
     with ThreadPoolExecutor(max_workers=args.threads) as executor:
-        future_to_port = {
-            executor.submit(scan_port, target_ip, port, args.sV, args.verbose): port 
-            for port in ports
-        }
-        for future in as_completed(future_to_port):
+        future_to_scan = {}
+        for ip in target_ips:
+            for port in ports:
+                future = executor.submit(scan_port, ip, port, args.sV, args.delay)
+                future_to_scan[future] = (ip, port)
+                
+        for future in as_completed(future_to_scan):
+            ip, port = future_to_scan[future]
             result = future.result()
+            
+            if args.verbose:
+                with print_lock:
+                    scanned_count += 1
+                    progress = int((scanned_count / total_scans) * 100)
+                    bar_length = 20
+                    filled = int(bar_length * progress / 100)
+                    bar = '#' * filled + '-' * (bar_length - filled)
+                    print(f"{YELLOW}\r[*] [{bar}] {progress}% | Scanning {ip}:{port}{RESET}", end='')
+                    
             if result:
-                open_ports.append(result)
+                if ip not in all_results:
+                    all_results[ip] = []
+                all_results[ip].append(result)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
     
     if args.verbose:
-        print(" " * 40, end='\r')
+        print(" " * 80, end='\r')
 
     print("\n" + "="*50)
     print(f"{CYAN}SCAN RESULTS{RESET}")
     print("="*50)
 
-    if os_info:
-        print(f"{CYAN}OS DETECTION:{RESET} {os_info}")
-        print("="*50)
-
     output_lines = []
-    
-    if open_ports:
-        if args.sV:
-            header = f"{'PORT':<10} {'STATE':<10} {'SERVICE'}"
-            output_lines.append(header)
-            output_lines.append("-" * len(header))
-            for port, service in sorted(open_ports):
-                output_lines.append(f"{port:<10} {GREEN}open{RESET:<4} {service}")
-        else:
-            header = f"{'PORT':<10} {'STATE'}"
-            output_lines.append(header)
-            output_lines.append("-" * len(header))
-            for port, _ in sorted(open_ports):
-                output_lines.append(f"{port:<10} {GREEN}open{RESET}")
-    else:
+    json_data = {
+        "scan_time_seconds": round(elapsed_time, 2),
+        "hosts": []
+    }
+
+    if not all_results:
         output_lines.append(f"{RED}No open ports found.{RESET}")
-        
+        for ip in target_ips:
+            json_data["hosts"].append({"ip": ip, "os": os_info.get(ip, "N/A"), "open_ports": []})
+    else:
+        for ip, open_ports in all_results.items():
+            output_lines.append(f"\nTarget: {ip}")
+            if ip in os_info:
+                output_lines.append(f"OS Detection: {os_info[ip]}")
+            
+            host_data = {"ip": ip, "os": os_info.get(ip, "N/A"), "open_ports": []}
+
+            if args.sV:
+                header = f"{'PORT':<10} {'STATE':<10} {'SERVICE'}"
+                output_lines.append(header)
+                output_lines.append("-" * len(header))
+                for port, service in sorted(open_ports):
+                    output_lines.append(f"{port:<10} {GREEN}open{RESET:<4} {service}")
+                    host_data["open_ports"].append({"port": port, "service": service})
+            else:
+                header = f"{'PORT':<10} {'STATE'}"
+                output_lines.append(header)
+                output_lines.append("-" * len(header))
+                for port, _ in sorted(open_ports):
+                    output_lines.append(f"{port:<10} {GREEN}open{RESET}")
+                    host_data["open_ports"].append({"port": port, "service": COMMON_PORTS.get(port, "Unknown")})
+            
+            json_data["hosts"].append(host_data)
+
     for line in output_lines:
         print(line)
         
-    print("="*50)
+    print("\n" + "="*50)
     print(f"{CYAN}Scan completed in {elapsed_time:.2f} seconds{RESET}")
         
     if args.oN:
         try:
             clean_lines = [line.replace(GREEN, "").replace(RED, "").replace(YELLOW, "").replace(CYAN, "").replace(RESET, "") for line in output_lines]
             with open(args.oN, 'w') as f:
-                f.write(f"Scan results for: {args.target} ({target_ip})\n")
-                if os_info:
-                    f.write(f"OS Detection: {os_info}\n")
+                f.write(f"Scan results for: {args.target}\n")
                 f.write(f"Completed in: {elapsed_time:.2f} seconds\n\n")
                 f.write("\n".join(clean_lines) + "\n")
             print(f"{GREEN}[+] Text results saved to {args.oN}{RESET}")
@@ -229,13 +323,6 @@ def main():
 
     if args.oJ:
         try:
-            json_data = {
-                "target": args.target,
-                "ip": target_ip,
-                "os_detection": os_info if os_info else "N/A",
-                "scan_time_seconds": round(elapsed_time, 2),
-                "open_ports": [{"port": p, "service": s} for p, s in sorted(open_ports)]
-            }
             with open(args.oJ, 'w') as f:
                 json.dump(json_data, f, indent=4)
             print(f"{GREEN}[+] JSON results saved to {args.oJ}{RESET}")
