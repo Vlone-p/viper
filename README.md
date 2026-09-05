@@ -1,7 +1,7 @@
 
 # 🐍 Viper
 
-A lightweight, highly concurrent TCP port scanner written in Python. Designed to be fast, clean, and easy to use, featuring service detection, OS fingerprinting, customizable threading, and multi-format output exporting.
+A lightweight, highly concurrent TCP port scanner written in Python. Designed to be fast, clean, and easy to use, featuring service detection, OS fingerprinting, customizable threading, and multi format output exporting.
 
 ## ✨ Features
 
