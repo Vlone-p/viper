@@ -10,7 +10,7 @@ COMMON_PORTS = {
     7: "Echo", 20: "FTP Data", 21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP",
     53: "DNS", 80: "HTTP", 88: "Kerberos", 110: "POP3", 111: "RPCbind",
     135: "MSRPC", 139: "NetBIOS", 143: "IMAP", 389: "LDAP", 443: "HTTPS",
-    445: "SMB", 464: "kpasswd5", 465: "SMTPS", 587: "SMTP Submission",
+    445: "microsoft-ds(SMB)", 464: "kpasswd5", 465: "SMTPS", 587: "SMTP Submission",
     593: "RPC over HTTP", 631: "IPP", 636: "LDAPS", 873: "rsync", 990: "FTPS",
     993: "IMAPS", 995: "POP3S", 1025: "NFS", 1080: "SOCKS Proxy", 1194: "OpenVPN",
     1433: "MSSQL", 1434: "MSSQL Ping", 1521: "Oracle DB", 1723: "PPTP", 2049: "NFS",
