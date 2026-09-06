@@ -1,28 +1,43 @@
-
 # 🐍 Viper
 
 A lightweight, highly concurrent TCP port scanner written in Python. Designed to be fast, clean, and easy to use, featuring service detection, OS fingerprinting, subnet scanning, and multi format output exporting.
 
 ## ✨ Features
 
+- **Modular Codebase:** Split into multiple files for easy maintenance and contribution.
+- **Web Title Extraction:** Grabs HTML title tags and HTTP headers for instant web service identification.
+- **Robust Banner Grabbing:** Securely wraps HTTPS ports in TLS to read encrypted banners and uses smart loops to capture large headers.
+- **Hardened Input Validation:** Safely parses port ranges and catches malformed inputs without crashing.
+- **Full Port Range (`-p-`):** Scan all 65535 ports using standard Nmap syntax.
+- **Graceful Exit (`Ctrl+C`):** Safely cancel a scan and immediately view or save the partial results.
+- **Scan Randomization (`--randomize`):** Shuffles target IPs and ports to evade firewalls and intrusion detection systems.
+- **Configurable Timeout (`--timeout`):** Adjust socket timeouts for high latency networks.
+- **Grepable Output (`-oG`):** Export results in a format easily searchable with standard Linux command line tools.
+- **Safe Mode (`--safe`):** Presets that limit threads and add delays for stealthy or cautious auditing.
 - **Host Discovery (`-sn`):** Perform a fast ping sweep to identify live hosts on a subnet before scanning.
-- **Read Targets From File (`-iL`):** Scan a large list of IPs, domains, or CIDR subnets directly from a text file.
-- **Exclude Ports (`--exclude`):** Skip specific ports during a scan to save time or avoid known services.
-- **Delay Between Probes (`--delay`):** Add a random delay between connection attempts to evade firewalls and intrusion detection systems.
-- **OS Detection (`-O`):** Performs ICMP ping fingerprinting to guess the target Operating System (Windows, Linux/Unix, or Network Devices) based on TTL values.
-- **Custom Thread Count (`-t`):** Control the speed! Adjust the number of concurrent threads (default: 100) for lightning fast scans or stealthy, low and slow scans.
-- **Smart Defaults:** Automatically scans the top ~65 most common ports if no range is specified, giving you instant, meaningful results.
-- **Service Detection (`-sV`):** Grabs banners to identify the actual service and version running on the port. Includes smart HTTP header parsing and a massive built in dictionary of common ports.
+- **Read Targets From File (`-iL`):** Scan a list of IPs, domains, or CIDR subnets from a text file.
+- **Exclude Ports (`--exclude`):** Skip specific ports during a scan to save time.
+- **OS Detection (`-O`):** Performs ICMP ping fingerprinting to guess the target OS based on TTL values.
+- **Custom Thread Count (`-t`):** Control the speed with concurrent threads (default: 100) for lightning fast or low and slow scans.
+- **Smart Defaults:** Automatically scans the top common ports if none are specified, giving you instant results.
 - **Verbose Mode (`-v`):** Displays a dynamic progress bar showing scan completion percentage and the current target.
-- **Multi Format Exporting:** Save scan results to a human readable text file (`-oN`) OR a machine readable JSON file (`-oJ`) for integration with other tools.
 - **CLI Aesthetic:** Features a clean ASCII art banner, colored terminal output, and precise scan timing metrics.
-- **Flexible Port Targeting (`-p`):** Scan single ports, comma separated lists, custom ranges, or entire CIDR subnets.
+
+## 📁 Project Structure
+
+Viper is split into modular components to keep the code clean and organized:
+
+- `viper.py` - Main entry point, CLI arguments, and output formatting.
+- `scanner.py` - Threading logic and port scanning execution.
+- `network.py` - Ping sweeps, OS detection, and target loading.
+- `banners.py` - Robust banner grabbing, TLS wrapping, and web title parsing.
+- `utils.py` - Terminal colors, port constants, and input validation.
 
 ## 📦 Requirements
 
 - Python 3.10+ (Uses modern type hinting)
 
-No external libraries are required! Viper runs purely on Python standard libraries (`socket`, `argparse`, `concurrent.futures`, `json`, `ipaddress`, `subprocess`).
+No external libraries are required! Viper runs purely on Python standard libraries (`socket`, `argparse`, `concurrent.futures`, `json`, `ssl`, `ipaddress`, `subprocess`).
 
 ## 🛠️ Usage
 
@@ -36,16 +51,20 @@ python viper.py <target> [options]
 | :--- | :--- |
 | `target` | Target IP, domain, or CIDR subnet (e.g., `192.168.1.0/24`). Optional if using `-iL`. |
 | `-iL` | Read targets from a specified text file. |
-| `-p` | Port range to scan (e.g., `1-1024` or `22,80,443`). Defaults to top common ports. |
+| `-p` | Port range to scan (e.g., `1-1024` or `22,80,443`). Use `-p-` for all ports. Defaults to top common ports. |
 | `--exclude` | Exclude specific ports (e.g., `80,443`). |
 | `-sV` | Enable service detection (banner grabbing). |
 | `-O` | Enable OS detection via ICMP TTL fingerprinting. |
 | `-sn` | Perform a ping sweep only (disable port scanning). |
 | `-v` | Enable verbose output (dynamic progress bar). |
 | `-t` | Number of concurrent threads (default: 100). |
+| `--timeout` | Socket timeout in seconds (default: 1.0). |
 | `--delay` | Add a random delay in seconds between probes (e.g., 0.5). |
+| `--safe` | Enable safe mode (limits threads to 10, adds 0.5s delay). |
+| `--randomize` | Randomize target IPs and ports to evade firewalls. |
 | `-oN` | Save scan results to a specified text file. |
 | `-oJ` | Save scan results to a specified JSON file. |
+| `-oG` | Save scan results to a specified grepable text file. |
 
 ### Examples
 
@@ -54,24 +73,24 @@ python viper.py <target> [options]
 python viper.py scanme.nmap.org
 ```
 
-**2. Scan a full subnet with OS detection and high threads:**
+**2. Full port scan with service detection and high threads:**
 ```bash
-python viper.py 10.10.10.0/24 -O -t 200
+python viper.py 10.10.10.10 -p- -sV -t 500
 ```
 
-**3. Read targets from a file and exclude ports:**
+**3. Read targets from a file, randomize scan, and save to grepable format:**
 ```bash
-python viper.py -iL targets.txt --exclude 22,80
+python viper.py -iL targets.txt --randomize -oG scan.grep
 ```
 
-**4. Ping sweep only to find live hosts:**
+**4. Ping sweep only to find live hosts on a subnet:**
 ```bash
 python viper.py 10.10.10.0/24 -sn
 ```
 
-**5. Verbose scan with delay saving to JSON:**
+**5. Safe mode scan with custom timeout saving to JSON:**
 ```bash
-python viper.py scanme.nmap.org -p 1-1000 -v --delay 0.5 -oJ results.json
+python viper.py scanme.nmap.org -p 1-1000 --safe --timeout 2.0 -oJ results.json
 ```
 
 ## ⚠️ Legal & Ethical Disclaimer
@@ -81,3 +100,4 @@ This tool is intended for educational purposes and authorized network auditing o
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
