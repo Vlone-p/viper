@@ -1,9 +1,12 @@
+
 # 🐍 Viper
 
 A lightweight, highly concurrent TCP port scanner written in Python. Designed to be fast, clean, and easy to use, featuring service detection, OS fingerprinting, subnet scanning, and multi format output exporting.
 
 ## ✨ Features
 
+- **Live Open Port Alerts:** Prints discovered open ports to the console the exact millisecond they are found, eliminating the wait for the final results table.
+- **Port State Detection:** Accurately distinguishes between `open`, `closed` (actively rejected), and `filtered` (dropped by a firewall) ports.
 - **Modular Codebase:** Split into multiple files for easy maintenance and contribution.
 - **Web Title Extraction:** Grabs HTML title tags and HTTP headers for instant web service identification.
 - **Robust Banner Grabbing:** Securely wraps HTTPS ports in TLS to read encrypted banners and uses smart loops to capture large headers.
@@ -12,6 +15,7 @@ A lightweight, highly concurrent TCP port scanner written in Python. Designed to
 - **Graceful Exit (`Ctrl+C`):** Safely cancel a scan and immediately view or save the partial results.
 - **Scan Randomization (`--randomize`):** Shuffles target IPs and ports to evade firewalls and intrusion detection systems.
 - **Configurable Timeout (`--timeout`):** Adjust socket timeouts for high latency networks.
+- **XML Output (`-oX`):** Export scan results in standard XML format for easy parsing by enterprise security tools like Metasploit or Dradis.
 - **Grepable Output (`-oG`):** Export results in a format easily searchable with standard Linux command line tools.
 - **Safe Mode (`--safe`):** Presets that limit threads and add delays for stealthy or cautious auditing.
 - **Host Discovery (`-sn`):** Perform a fast ping sweep to identify live hosts on a subnet before scanning.
@@ -28,7 +32,7 @@ A lightweight, highly concurrent TCP port scanner written in Python. Designed to
 Viper is split into modular components to keep the code clean and organized:
 
 - `viper.py` - Main entry point, CLI arguments, and output formatting.
-- `scanner.py` - Threading logic and port scanning execution.
+- `scanner.py` - Threading logic, live alerts, and port state detection.
 - `network.py` - Ping sweeps, OS detection, and target loading.
 - `banners.py` - Robust banner grabbing, TLS wrapping, and web title parsing.
 - `utils.py` - Terminal colors, port constants, and input validation.
@@ -37,7 +41,7 @@ Viper is split into modular components to keep the code clean and organized:
 
 - Python 3.10+ (Uses modern type hinting)
 
-No external libraries are required! Viper runs purely on Python standard libraries (`socket`, `argparse`, `concurrent.futures`, `json`, `ssl`, `ipaddress`, `subprocess`).
+No external libraries are required! Viper runs purely on Python standard libraries (`socket`, `argparse`, `concurrent.futures`, `json`, `ssl`, `ipaddress`, `subprocess`, `xml`).
 
 ## 🛠️ Usage
 
@@ -64,6 +68,7 @@ python viper.py <target> [options]
 | `--randomize` | Randomize target IPs and ports to evade firewalls. |
 | `-oN` | Save scan results to a specified text file. |
 | `-oJ` | Save scan results to a specified JSON file. |
+| `-oX` | Save scan results to a specified XML file. |
 | `-oG` | Save scan results to a specified grepable text file. |
 
 ### Examples
@@ -78,9 +83,9 @@ python viper.py scanme.nmap.org
 python viper.py 10.10.10.10 -p- -sV -t 500
 ```
 
-**3. Read targets from a file, randomize scan, and save to grepable format:**
+**3. Read targets from a file, randomize scan, and save to XML format:**
 ```bash
-python viper.py -iL targets.txt --randomize -oG scan.grep
+python viper.py -iL targets.txt --randomize -oX results.xml
 ```
 
 **4. Ping sweep only to find live hosts on a subnet:**
@@ -100,4 +105,3 @@ This tool is intended for educational purposes and authorized network auditing o
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-

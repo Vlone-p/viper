@@ -3,6 +3,7 @@ import time
 import json
 import sys
 import random
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils import *
 from network import ping_host, detect_os, load_targets
@@ -14,7 +15,7 @@ ____   ____.__
  \   Y   / |  \____ \_/ __ \_  __ \
   \     /  |  |  |_> >  ___/|  | \/
    \___/   |__|   __/ \___  >__|   
-              |__|        \/       {RESET}{YELLOW}v2.0{RESET}
+              |__|        \/       {RESET}{YELLOW}v2.1{RESET}
 """
 
 def main():
@@ -33,6 +34,7 @@ def main():
     parser.add_argument("--randomize", action="store_true", help="Randomize target IPs and ports to evade firewalls")
     parser.add_argument("-oN", metavar="FILE", help="Save scan results to a text file")
     parser.add_argument("-oJ", metavar="FILE", help="Save scan results to a JSON file")
+    parser.add_argument("-oX", metavar="FILE", help="Save scan results to an XML file")
     parser.add_argument("-oG", metavar="FILE", help="Save scan results to a grepable text file")
     parser.add_argument("-sn", action="store_true", help="Perform a ping sweep only (disable port scanning)")
     args = parser.parse_args()
@@ -107,49 +109,48 @@ def main():
     if args.verbose:
         print(" " * 80, end='\r')
 
-    print("\n" + "="*50)
+    print("\n" + "="*60)
     print(f"{CYAN}SCAN RESULTS{RESET}")
-    print("="*50)
+    print("="*60)
 
     output_lines = []
     json_data = {
         "scan_time_seconds": round(elapsed_time, 2),
         "hosts": []
     }
+    
+    # For XML
+    xml_root = ET.Element("ViperScan")
 
     if not all_results:
-        output_lines.append(f"{RED}No open ports found.{RESET}")
+        output_lines.append(f"{RED}No ports found.{RESET}")
         for ip in target_ips:
             json_data["hosts"].append({"ip": ip, "os": os_info.get(ip, "N/A"), "open_ports": []})
     else:
-        for ip, open_ports in all_results.items():
+        for ip, results in all_results.items():
             output_lines.append(f"\nTarget: {ip}")
             if ip in os_info:
                 output_lines.append(f"OS Detection: {os_info[ip]}")
             
-            host_data = {"ip": ip, "os": os_info.get(ip, "N/A"), "open_ports": []}
+            host_data = {"ip": ip, "os": os_info.get(ip, "N/A"), "ports": []}
+            xml_host = ET.SubElement(xml_root, "Host", {"ip": ip, "os": os_info.get(ip, "N/A")})
 
-            if args.sV:
-                header = f"{'PORT':<10} {'STATE':<10} {'SERVICE'}"
-                output_lines.append(header)
-                output_lines.append("-" * len(header))
-                for port, service in sorted(open_ports):
-                    output_lines.append(f"{port:<10} {GREEN}open{RESET:<4} {service}")
-                    host_data["open_ports"].append({"port": port, "service": service})
-            else:
-                header = f"{'PORT':<10} {'STATE'}"
-                output_lines.append(header)
-                output_lines.append("-" * len(header))
-                for port, _ in sorted(open_ports):
-                    output_lines.append(f"{port:<10} {GREEN}open{RESET}")
-                    host_data["open_ports"].append({"port": port, "service": COMMON_PORTS.get(port, "Unknown")})
+            header = f"{'PORT':<10} {'STATE':<10} {'SERVICE'}"
+            output_lines.append(header)
+            output_lines.append("-" * len(header))
+            
+            for port, state, service in sorted(results):
+                color = GREEN if state == "open" else (YELLOW if state == "filtered" else RED)
+                output_lines.append(f"{port:<10} {color}{state:<6}{RESET}    {service}")
+                host_data["ports"].append({"port": port, "state": state, "service": service})
+                ET.SubElement(xml_host, "Port", {"port": str(port), "state": state, "service": service})
             
             json_data["hosts"].append(host_data)
 
     for line in output_lines:
         print(line)
         
-    print("\n" + "="*50)
+    print("\n" + "="*60)
     print(f"{CYAN}Scan completed in {elapsed_time:.2f} seconds{RESET}")
         
     if args.oN:
@@ -174,16 +175,26 @@ def main():
     if args.oG:
         try:
             with open(args.oG, 'w') as f:
-                for ip, open_ports in all_results.items():
+                for ip, results in all_results.items():
                     os_str = os_info.get(ip, "Unknown")
+                    open_ports = [f"{p}/open/tcp//{s}" for p, s, st in results if st == "open"]
                     if open_ports:
-                        ports_str = ", ".join([f"{p}/open/tcp//{s}" for p, s in sorted(open_ports)])
+                        ports_str = ", ".join(open_ports)
                         f.write(f"Host: {ip} ({os_str}) Ports: {ports_str}\n")
                     else:
                         f.write(f"Host: {ip} ({os_str}) Status: Up\n")
             print(f"{GREEN}[+] Grepable results saved to {args.oG}{RESET}")
         except IOError as e:
             print(f"{RED}[!] Error writing to grepable file: {e}{RESET}")
+
+    if args.oX:
+        try:
+            tree = ET.ElementTree(xml_root)
+            with open(args.oX, "wb") as f:
+                tree.write(f, encoding="utf-8", xml_declaration=True, pretty_print=True)
+            print(f"{GREEN}[+] XML results saved to {args.oX}{RESET}")
+        except IOError as e:
+            print(f"{RED}[!] Error writing to XML file: {e}{RESET}")
 
 if __name__ == "__main__":
     main()
