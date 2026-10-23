@@ -1,14 +1,18 @@
-
 # 🐍 Viper
 
-A lightweight, highly concurrent TCP port scanner written in Python. Designed to be fast, clean, and easy to use, featuring service detection, OS fingerprinting, subnet scanning, and multi format output exporting.
+A lightweight, highly concurrent TCP port scanner written in Python. Designed to be fast, clean, and easy to use, featuring service detection, OS fingerprinting, subnet scanning, firewall evasion, and multi format output exporting.
 
 ## ✨ Features
 
+- **Standard Timing Profiles (`-T1` to `-T10`):** Precise control over scan speed, from slow and stealthy to insanely fast.
+- **Source Port Manipulation (`-g`):** Spoof the source port (e.g., 53 for DNS) to bypass strict firewalls and access control lists.
+- **Dynamic Top Ports (`--top-ports`):** Scan the N most common ports (e.g., `--top-ports 100`) for rapid reconnaissance.
+- **Host Exclusion (`--exclude-targets`):** Skip specific IPs or subnets when scanning large networks to avoid critical infrastructure.
+- **Deep HTTP Fingerprinting:** Extracts `Server`, `X-Powered-By`, `WWW-Authenticate`, and HTML titles for instant web service identification.
+- **Version Extraction:** Uses smart regex to clean raw banners, parsing exact version numbers (e.g., `OpenSSH 8.2p1`).
 - **Live Open Port Alerts:** Prints discovered open ports to the console the exact millisecond they are found, eliminating the wait for the final results table.
 - **Port State Detection:** Accurately distinguishes between `open`, `closed` (actively rejected), and `filtered` (dropped by a firewall) ports.
 - **Modular Codebase:** Split into multiple files for easy maintenance and contribution.
-- **Web Title Extraction:** Grabs HTML title tags and HTTP headers for instant web service identification.
 - **Robust Banner Grabbing:** Securely wraps HTTPS ports in TLS to read encrypted banners and uses smart loops to capture large headers.
 - **Hardened Input Validation:** Safely parses port ranges and catches malformed inputs without crashing.
 - **Full Port Range (`-p-`):** Scan all 65535 ports using standard Nmap syntax.
@@ -56,16 +60,20 @@ python viper.py <target> [options]
 | `target` | Target IP, domain, or CIDR subnet (e.g., `192.168.1.0/24`). Optional if using `-iL`. |
 | `-iL` | Read targets from a specified text file. |
 | `-p` | Port range to scan (e.g., `1-1024` or `22,80,443`). Use `-p-` for all ports. Defaults to top common ports. |
+| `--top-ports` | Scan the N most common ports (e.g., `--top-ports 100`). |
 | `--exclude` | Exclude specific ports (e.g., `80,443`). |
+| `--exclude-targets` | Exclude specific IPs or subnets (e.g., `192.168.1.1`). |
 | `-sV` | Enable service detection (banner grabbing). |
 | `-O` | Enable OS detection via ICMP TTL fingerprinting. |
 | `-sn` | Perform a ping sweep only (disable port scanning). |
 | `-v` | Enable verbose output (dynamic progress bar). |
 | `-t` | Number of concurrent threads (default: 100). |
+| `-T` | Timing profile 1 (slow) to 10 (insane). |
 | `--timeout` | Socket timeout in seconds (default: 1.0). |
 | `--delay` | Add a random delay in seconds between probes (e.g., 0.5). |
 | `--safe` | Enable safe mode (limits threads to 10, adds 0.5s delay). |
 | `--randomize` | Randomize target IPs and ports to evade firewalls. |
+| `-g` | Specify a source port for firewall evasion (e.g., 53). Requires sudo for ports under 1024. |
 | `-oN` | Save scan results to a specified text file. |
 | `-oJ` | Save scan results to a specified JSON file. |
 | `-oX` | Save scan results to a specified XML file. |
@@ -78,24 +86,29 @@ python viper.py <target> [options]
 python viper.py scanme.nmap.org
 ```
 
-**2. Full port scan with service detection and high threads:**
+**2. Aggressive full port scan with service detection:**
 ```bash
-python viper.py 10.10.10.10 -p- -sV -t 500
+python viper.py 10.10.10.10 -p- -sV -T8
 ```
 
-**3. Read targets from a file, randomize scan, and save to XML format:**
+**3. Firewall evasion using source port 53 (DNS):**
+```bash
+sudo python viper.py 10.10.10.10 -g 53 -T3
+```
+
+**4. Read targets from a file, randomize scan, and save to XML format:**
 ```bash
 python viper.py -iL targets.txt --randomize -oX results.xml
 ```
 
-**4. Ping sweep only to find live hosts on a subnet:**
+**5. Ping sweep only to find live hosts on a subnet:**
 ```bash
 python viper.py 10.10.10.0/24 -sn
 ```
 
-**5. Safe mode scan with custom timeout saving to JSON:**
+**6. Scan top 100 ports, excluding the gateway:**
 ```bash
-python viper.py scanme.nmap.org -p 1-1000 --safe --timeout 2.0 -oJ results.json
+python viper.py 192.168.1.0/24 --top-ports 100 --exclude-targets 192.168.1.1
 ```
 
 ## ⚠️ Legal & Ethical Disclaimer
