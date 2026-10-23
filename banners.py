@@ -1,9 +1,10 @@
 import socket
 import ssl
 import re
+from utils import clean_banner
 
 HTTPS_PORTS = [443, 8443, 9443]
-HTTP_PORTS = [80, 5985, 8080, 8888, 3000]
+HTTP_PORTS = [80, 5985, 8080, 8888, 3000, 8000, 8008, 8081, 8088]
 
 def _read_banner(sock: socket.socket, ip: str, port: int, timeout: float) -> str:
     try:
@@ -17,24 +18,33 @@ def _read_banner(sock: socket.socket, ip: str, port: int, timeout: float) -> str
             decoded = data.decode('utf-8', errors='ignore').strip()
             if "HTTP/" in decoded:
                 server = ""
+                powered_by = ""
                 title = ""
+                auth = ""
                 
                 for line in decoded.split('\n'):
-                    if line.lower().startswith("server:"):
-                        server = line.split(':', 1)[1].strip()[:60]
+                    low_line = line.lower()
+                    if low_line.startswith("server:"):
+                        server = line.split(':', 1)[1].strip()
+                    elif low_line.startswith("x-powered-by:"):
+                        powered_by = line.split(':', 1)[1].strip()
+                    elif low_line.startswith("www-authenticate:"):
+                        auth = line.split(':', 1)[1].strip()
                 
                 title_match = re.search(r'<title>(.*?)</title>', decoded, re.IGNORECASE | re.DOTALL)
                 if title_match:
-                    title = title_match.group(1).strip()[:60]
-                
-                if title and server:
-                    return f"{server} ({title})"
-                elif title:
-                    return title
-                elif server:
-                    return server
+                    title = title_match.group(1).strip()
                     
-            return decoded.split('\n')[0].strip()[:60]
+                parts = []
+                if server: parts.append(server)
+                if powered_by: parts.append(f"Powered by: {powered_by}")
+                if auth: parts.append(f"Auth: {auth}")
+                if title: parts.append(f"Title: {title}")
+                
+                if parts:
+                    return " | ".join(parts)[:100]
+                    
+            return clean_banner(decoded.split('\n')[0].strip()[:60])
     except socket.timeout:
         pass
     except Exception:

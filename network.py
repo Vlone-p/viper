@@ -40,7 +40,7 @@ def detect_os(target_ip: str) -> str:
     except Exception:
         return "Ping command failed or timeout"
 
-def load_targets(target_arg: str, file_arg: str) -> list[str]:
+def load_targets(target_arg: str, file_arg: str, exclude_arg: str = None) -> list[str]:
     targets = set()
     if file_arg:
         try:
@@ -68,4 +68,22 @@ def load_targets(target_arg: str, file_arg: str) -> list[str]:
                 resolved_ips.add(socket.gethostbyname(t))
             except socket.gaierror:
                 print(f"{RED}[!] Cannot resolve hostname: {t}{RESET}")
+                
+    if exclude_arg:
+        exclude_set = set()
+        for ex in exclude_arg.split(','):
+            ex = ex.strip()
+            if '/' in ex:
+                try:
+                    for ip in ipaddress.ip_network(ex, strict=False).hosts():
+                        exclude_set.add(str(ip))
+                except ValueError:
+                    pass
+            else:
+                try:
+                    exclude_set.add(socket.gethostbyname(ex))
+                except socket.gaierror:
+                    pass
+        resolved_ips = resolved_ips - exclude_set
+
     return sorted(list(resolved_ips))

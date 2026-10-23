@@ -9,12 +9,17 @@ from utils import COMMON_PORTS, YELLOW, RED, GREEN, RESET
 
 print_lock = threading.Lock()
 
-def scan_port(target_ip: str, port: int, detect_service: bool, delay: float, timeout: float) -> tuple[int, str, str] | None:
+def scan_port(target_ip: str, port: int, detect_service: bool, delay: float, timeout: float, source_port: int) -> tuple[int, str, str] | None:
     if delay > 0:
         time.sleep(random.uniform(0, delay))
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
+            
+            if source_port:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind(("", source_port))
+                
             result = s.connect_ex((target_ip, port))
             
             if result == 0:
@@ -28,7 +33,6 @@ def scan_port(target_ip: str, port: int, detect_service: bool, delay: float, tim
             elif result == errno.ECONNREFUSED:
                 return port, "closed", ""
             else:
-                # ETIMEDOUT or EHOSTUNREACH
                 return port, "filtered", ""
                 
     except socket.error:
@@ -44,7 +48,7 @@ def execute_scan(target_ips: list[str], ports: list[int], args) -> dict:
         future_to_scan = {}
         for ip in target_ips:
             for port in ports:
-                future = executor.submit(scan_port, ip, port, args.sV, args.delay, args.timeout)
+                future = executor.submit(scan_port, ip, port, args.sV, args.delay, args.timeout, args.source_port)
                 future_to_scan[future] = (ip, port)
                 
         try:
@@ -64,7 +68,6 @@ def execute_scan(target_ips: list[str], ports: list[int], args) -> dict:
                 if result:
                     p, state, service = result
                     
-                    # Live Open Port Alert
                     if state == "open":
                         with print_lock:
                             print(f"\n{GREEN}[+] Discovered open port {p}/tcp on {ip}{RESET}", end='')
@@ -80,5 +83,5 @@ def execute_scan(target_ips: list[str], ports: list[int], args) -> dict:
             print(f"{YELLOW}[*] Returning partial results.{RESET}")
             
     if args.verbose:
-        print() # Newline after progress bar / live alerts
+        print() 
     return all_results

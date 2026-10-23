@@ -3,6 +3,7 @@ import time
 import json
 import sys
 import random
+import socket
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils import *
@@ -15,23 +16,40 @@ ____   ____.__
  \   Y   / |  \____ \_/ __ \_  __ \
   \     /  |  |  |_> >  ___/|  | \/
    \___/   |__|   __/ \___  >__|   
-              |__|        \/       {RESET}{YELLOW}v2.1{RESET}
+              |__|        \/       {RESET}{YELLOW}v2.3{RESET}
 """
+
+TIMING_PROFILES = {
+    1: {"threads": 1, "delay": 5.0, "timeout": 5.0},
+    2: {"threads": 10, "delay": 2.0, "timeout": 3.0},
+    3: {"threads": 50, "delay": 1.0, "timeout": 2.0},
+    4: {"threads": 100, "delay": 0.5, "timeout": 1.5},
+    5: {"threads": 100, "delay": 0.0, "timeout": 1.0},
+    6: {"threads": 200, "delay": 0.0, "timeout": 0.8},
+    7: {"threads": 300, "delay": 0.0, "timeout": 0.6},
+    8: {"threads": 500, "delay": 0.0, "timeout": 0.5},
+    9: {"threads": 750, "delay": 0.0, "timeout": 0.4},
+    10: {"threads": 1000, "delay": 0.0, "timeout": 0.3}
+}
 
 def main():
     parser = argparse.ArgumentParser(description="Fast Python Port Scanner")
     parser.add_argument("target", nargs='?', help="Target IP, domain, or CIDR subnet")
     parser.add_argument("-iL", metavar="FILE", help="Read targets from a text file")
     parser.add_argument("-p", "--ports", help="Port range (e.g., 1-1024 or 22,80,443). Use -p- for all ports.")
+    parser.add_argument("--top-ports", type=int, help="Scan the N most common ports (e.g., --top-ports 100)")
     parser.add_argument("--exclude", help="Exclude specific ports (e.g., 80,443)")
+    parser.add_argument("--exclude-targets", help="Exclude specific IPs or subnets (e.g., 192.168.1.1)")
     parser.add_argument("-sV", action="store_true", help="Enable service detection (banner grabbing)")
     parser.add_argument("-O", action="store_true", help="Enable OS detection via ICMP TTL fingerprinting")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output (progress bar)")
     parser.add_argument("-t", "--threads", type=int, default=100, help="Number of concurrent threads (default: 100)")
+    parser.add_argument("-T", type=int, choices=range(1, 11), help="Timing profile 1 (slow) to 10 (insane)")
     parser.add_argument("--timeout", type=float, default=1.0, help="Socket timeout in seconds (default: 1.0)")
     parser.add_argument("--delay", type=float, default=0.0, help="Add a random delay in seconds between probes (e.g., 0.5)")
     parser.add_argument("--safe", action="store_true", help="Enable safe mode (limits threads to 10, adds 0.5s delay)")
     parser.add_argument("--randomize", action="store_true", help="Randomize target IPs and ports to evade firewalls")
+    parser.add_argument("-g", "--source-port", type=int, help="Specify a source port for firewall evasion (e.g., 53)")
     parser.add_argument("-oN", metavar="FILE", help="Save scan results to a text file")
     parser.add_argument("-oJ", metavar="FILE", help="Save scan results to a JSON file")
     parser.add_argument("-oX", metavar="FILE", help="Save scan results to an XML file")
@@ -45,17 +63,38 @@ def main():
         print(f"{RED}[!] Error: You must specify a target or provide an input file (-iL).{RESET}")
         return
 
+    if args.source_port:
+        try:
+            test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            test_sock.bind(("", args.source_port))
+            test_sock.close()
+        except OSError as e:
+            print(f"{RED}[!] Error binding to source port {args.source_port}: {e}{RESET}")
+            print(f"{YELLOW}[!] Ports under 1024 require root/admin privileges. Try running with sudo.{RESET}")
+            return
+
+    if args.T:
+        profile = TIMING_PROFILES[args.T]
+        args.threads = profile["threads"]
+        args.delay = profile["delay"]
+        args.timeout = profile["timeout"]
+        print(f"{CYAN}[*] Timing profile T{args.T} enabled.{RESET}")
+
     if args.safe:
         print(f"{YELLOW}[!] Safe mode enabled. Throttling scan speed.{RESET}")
         args.threads = min(args.threads, 10)
         args.delay = max(args.delay, 0.5)
 
-    target_ips = load_targets(args.target, args.iL)
+    target_ips = load_targets(args.target, args.iL, args.exclude_targets)
     if not target_ips:
         return
 
     print(f"{CYAN}[*] Loaded {len(target_ips)} target(s){RESET}")
-    print(f"{CYAN}[*] Thread count set to {args.threads}{RESET}\n")
+    print(f"{CYAN}[*] Thread count set to {args.threads}{RESET}")
+    if args.source_port:
+        print(f"{CYAN}[*] Source port set to {args.source_port}{RESET}")
+    print()
 
     if args.sn:
         print(f"{YELLOW}[*] Running host discovery (ping sweep)...{RESET}")
@@ -79,7 +118,9 @@ def main():
             os_info[ip] = detect_os(ip)
         print(f"{GREEN}[*] OS Detection complete.{RESET}\n")
 
-    if args.ports:
+    if args.top_ports:
+        ports = TOP_PORTS[:args.top_ports]
+    elif args.ports:
         ports = parse_ports(args.ports)
     else:
         ports = TOP_PORTS
@@ -119,7 +160,6 @@ def main():
         "hosts": []
     }
     
-    # For XML
     xml_root = ET.Element("ViperScan")
 
     if not all_results:
