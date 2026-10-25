@@ -16,7 +16,7 @@ ____   ____.__
  \   Y   / |  \____ \_/ __ \_  __ \
   \     /  |  |  |_> >  ___/|  | \/
    \___/   |__|   __/ \___  >__|   
-              |__|        \/       {RESET}{YELLOW}v2.3{RESET}
+              |__|        \/       {RESET}{YELLOW}v2.3.1{RESET}
 """
 
 TIMING_PROFILES = {
@@ -43,6 +43,7 @@ def main():
     parser.add_argument("-sV", action="store_true", help="Enable service detection (banner grabbing)")
     parser.add_argument("-O", action="store_true", help="Enable OS detection via ICMP TTL fingerprinting")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output (progress bar)")
+    parser.add_argument("--show-all", action="store_true", help="Show closed and filtered ports in the results")
     parser.add_argument("-t", "--threads", type=int, default=100, help="Number of concurrent threads (default: 100)")
     parser.add_argument("-T", type=int, choices=range(1, 11), help="Timing profile 1 (slow) to 10 (insane)")
     parser.add_argument("--timeout", type=float, default=1.0, help="Socket timeout in seconds (default: 1.0)")
@@ -163,9 +164,9 @@ def main():
     xml_root = ET.Element("ViperScan")
 
     if not all_results:
-        output_lines.append(f"{RED}No ports found.{RESET}")
+        output_lines.append(f"{RED}No open ports found.{RESET}")
         for ip in target_ips:
-            json_data["hosts"].append({"ip": ip, "os": os_info.get(ip, "N/A"), "open_ports": []})
+            json_data["hosts"].append({"ip": ip, "os": os_info.get(ip, "N/A"), "ports": []})
     else:
         for ip, results in all_results.items():
             output_lines.append(f"\nTarget: {ip}")
@@ -180,10 +181,11 @@ def main():
             output_lines.append("-" * len(header))
             
             for port, state, service in sorted(results):
-                color = GREEN if state == "open" else (YELLOW if state == "filtered" else RED)
-                output_lines.append(f"{port:<10} {color}{state:<6}{RESET}    {service}")
-                host_data["ports"].append({"port": port, "state": state, "service": service})
-                ET.SubElement(xml_host, "Port", {"port": str(port), "state": state, "service": service})
+                if state == "open" or args.show_all:
+                    color = GREEN if state == "open" else (YELLOW if state == "filtered" else RED)
+                    output_lines.append(f"{port:<10} {color}{state:<6}{RESET}    {service}")
+                    host_data["ports"].append({"port": port, "state": state, "service": service})
+                    ET.SubElement(xml_host, "Port", {"port": str(port), "state": state, "service": service})
             
             json_data["hosts"].append(host_data)
 
